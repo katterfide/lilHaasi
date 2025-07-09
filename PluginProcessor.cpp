@@ -136,7 +136,7 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     auto numSamples = buffer.getNumSamples();
     float delayTimeMs = getDelayTimeMs();
-    auto delaySamples = static_cast<int>(getSampleRate() * delayTimeMs / 1000.0);
+    int delaySamples = static_cast<int>(getSampleRate() * std::abs(delayTimeMs) / 1000.0);
     auto delayBufferLength = delayBuffer.getNumSamples();
 
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
@@ -149,13 +149,14 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         {
             const int readPosition = (writePosition + delayBufferLength - delaySamples) % delayBufferLength;
             float delayedSample = delayData[readPosition];
+            delayData[writePosition] = input[i];
 
-            delayData[writePosition] = input[i];  // write current sample into delay buffer
+            // Delay left if value is negative, right if positive
+            bool shouldDelayThisChannel =
+                (channel == 0 && delayTimeMs < 0) ||
+                (channel == 1 && delayTimeMs > 0);
 
-            // Apply delay only to right channel (channel 1)
-            output[i] = (channel == 1) ? delayedSample : input[i];
-
-            // update read pointer for next sample
+            output[i] = shouldDelayThisChannel ? delayedSample : input[i];
         }
     }
 
@@ -207,8 +208,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout AudioPluginAudioProcessor::c
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
+    // Range: -250 ms to +250 ms, centered at 0
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "delay", "Delay (ms)", juce::NormalisableRange<float>(0.0f, 500.0f), 0.0f));
+        "delay", "Delay (ms)", juce::NormalisableRange<float>(-250.0f, 250.0f), 0.0f));
 
     return { params.begin(), params.end() };
 }

@@ -1,6 +1,8 @@
 #pragma once
 
-#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_gui_basics/juce_gui_basics.h>          // for sliders and GUI widgets
+#include <juce_audio_processors/juce_audio_processors.h>  // for AudioProcessorValueTreeState
+#include "PluginProcessor.h"
 
 //==============================================================================
 class AudioPluginAudioProcessor final : public juce::AudioProcessor
@@ -13,6 +15,8 @@ public:
     //==============================================================================
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     float getDelayTimeMs() const;
+    juce::AudioProcessorValueTreeState& getValueTree() { return parameters; }
+
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;

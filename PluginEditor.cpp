@@ -2,13 +2,20 @@
 #include "PluginEditor.h"
 
 //==============================================================================
-AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor& p)
-    : AudioProcessorEditor (&p), processorRef (p)
+AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor(AudioPluginAudioProcessor& p)
+    : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    juce::ignoreUnused (processorRef);
-    // Make sure that before the constructor has finished, you've set the
-    // editor's size to whatever you need it to be.
-    setSize (400, 300);
+    delaySlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    delaySlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 20);
+    delaySlider.setTextValueSuffix(" ms");
+    delaySlider.setRange(-250.0f, 250.0f, 1.0f);
+    delaySlider.setValue(0.0f);
+    addAndMakeVisible(delaySlider);
+
+    delayAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        audioProcessor.getValueTree(), "delay", delaySlider);
+
+    setSize(400, 300);
 }
 
 AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor()
