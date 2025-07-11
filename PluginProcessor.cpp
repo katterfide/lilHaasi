@@ -128,40 +128,51 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
   #endif
 }
 
-void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                              juce::MidiBuffer& midiMessages)
+void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
-    juce::ignoreUnused (midiMessages);
     juce::ScopedNoDenormals noDenormals;
-
     auto numSamples = buffer.getNumSamples();
-    float delayTimeMs = getDelayTimeMs();
-    int delaySamples = static_cast<int>(getSampleRate() * std::abs(delayTimeMs) / 1000.0);
-    auto delayBufferLength = delayBuffer.getNumSamples();
+    auto numChannels = buffer.getNumChannels();
 
-    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+    // 1. Get parameter value
+    float delayMs = getDelayTimeMs();
+    if (delayMs == 0.0f) return; // nothing to do!
+
+    int sampleRate = static_cast<int>(getSampleRate());
+    int maxDelaySamples = static_cast<int>(0.25 * sampleRate); // 250ms max
+    int delaySamples = static_cast<int>(std::abs(delayMs) * sampleRate / 1000.0f);
+
+    // 2. Prepare delay buffer if needed
+    if (delayBuffer.getNumChannels() != numChannels || delayBuffer.getNumSamples() < maxDelaySamples + numSamples)
     {
-        auto* input = buffer.getReadPointer(channel);
-        auto* output = buffer.getWritePointer(channel);
-        auto* delayData = delayBuffer.getWritePointer(channel);
+        delayBuffer.setSize(numChannels, maxDelaySamples + numSamples, false, true, true);
+        delayBuffer.clear();
+        writePosition = 0;
+    }
+
+    // 3. Process
+    for (int channel = 0; channel < numChannels; ++channel)
+    {
+        float* channelData = buffer.getWritePointer(channel);
+        float* delayData = delayBuffer.getWritePointer(channel);
+
+        bool applyDelay =
+            (channel == 0 && delayMs < 0.0f) ||   // left channel, negative
+            (channel == 1 && delayMs > 0.0f);     // right channel, positive
 
         for (int i = 0; i < numSamples; ++i)
         {
-            const int readPosition = (writePosition + delayBufferLength - delaySamples) % delayBufferLength;
-            float delayedSample = delayData[readPosition];
-            delayData[writePosition] = input[i];
+            int delayBufferSize = delayBuffer.getNumSamples();
+            int readPosition = (writePosition + delayBufferSize - delaySamples) % delayBufferSize;
 
-            // Delay left if value is negative, right if positive
-            bool shouldDelayThisChannel =
-                (channel == 0 && delayTimeMs < 0) ||
-                (channel == 1 && delayTimeMs > 0);
+            float delayed = delayData[readPosition];
+            delayData[writePosition] = channelData[i];
 
-            output[i] = shouldDelayThisChannel ? delayedSample : input[i];
+            channelData[i] = applyDelay ? delayed : channelData[i];
+
+            writePosition = (writePosition + 1) % delayBufferSize;
         }
     }
-
-    // Move write head forward
-    writePosition = (writePosition + numSamples) % delayBuffer.getNumSamples();
 }
 
 
