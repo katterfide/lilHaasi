@@ -95,7 +95,7 @@ void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     delayBuffer.setSize(2, maxDelaySamples); // stereo: 2 channels
     delayBuffer.clear();
 
-    writePosition = 0;
+    delayWritePosition = 0;
 }
 
 void AudioPluginAudioProcessor::releaseResources()
@@ -134,44 +134,48 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     auto numSamples = buffer.getNumSamples();
     auto numChannels = buffer.getNumChannels();
 
-    // 1. Get parameter value
     float delayMs = getDelayTimeMs();
-    if (delayMs == 0.0f) return; // nothing to do!
-
     int sampleRate = static_cast<int>(getSampleRate());
-    int maxDelaySamples = static_cast<int>(0.25 * sampleRate); // 250ms max
+    int maxDelaySamples = static_cast<int>(0.25 * sampleRate); // 250ms
     int delaySamples = static_cast<int>(std::abs(delayMs) * sampleRate / 1000.0f);
 
-    // 2. Prepare delay buffer if needed
+    // Setup delay buffer if necessary
     if (delayBuffer.getNumChannels() != numChannels || delayBuffer.getNumSamples() < maxDelaySamples + numSamples)
     {
         delayBuffer.setSize(numChannels, maxDelaySamples + numSamples, false, true, true);
         delayBuffer.clear();
-        writePosition = 0;
+        delayWritePosition = 0;
     }
 
-    // 3. Process
-    for (int channel = 0; channel < numChannels; ++channel)
+    bool delayLeft = (delayMs < 0.0f);
+    bool delayRight = (delayMs > 0.0f);
+
+    for (int i = 0; i < numSamples; ++i)
     {
-        float* channelData = buffer.getWritePointer(channel);
-        float* delayData = delayBuffer.getWritePointer(channel);
-
-        bool applyDelay =
-            (channel == 0 && delayMs < 0.0f) ||   // left channel, negative
-            (channel == 1 && delayMs > 0.0f);     // right channel, positive
-
-        for (int i = 0; i < numSamples; ++i)
+        for (int channel = 0; channel < numChannels; ++channel)
         {
-            int delayBufferSize = delayBuffer.getNumSamples();
-            int readPosition = (writePosition + delayBufferSize - delaySamples) % delayBufferSize;
+            float* channelData = buffer.getWritePointer(channel);
+            float* delayData = delayBuffer.getWritePointer(channel);
 
-            float delayed = delayData[readPosition];
-            delayData[writePosition] = channelData[i];
+            // Write the input to the delay buffer
+            delayData[delayWritePosition] = channelData[i];
 
-            channelData[i] = applyDelay ? delayed : channelData[i];
+            // By default, just copy input to output
+            float out = channelData[i];
 
-            writePosition = (writePosition + 1) % delayBufferSize;
+            // If this is the delayed channel, output the delayed sample
+            if ((channel == 0 && delayLeft) || (channel == 1 && delayRight))
+            {
+                int delayBufferSize = delayBuffer.getNumSamples();
+                int readPos = (delayWritePosition + delayBufferSize - delaySamples) % delayBufferSize;
+                out = delayData[readPos];
+            }
+            channelData[i] = out;
         }
+        // Move write head forward ONCE per sample
+        delayWritePosition++;
+        if (delayWritePosition >= delayBuffer.getNumSamples())
+            delayWritePosition = 0;
     }
 }
 
