@@ -2,16 +2,16 @@
 #include "PluginEditor.h"
 
 //==============================================================================
-// constructor for setting up the processor and parameters
+
 AudioPluginAudioProcessor::AudioPluginAudioProcessor()
     : AudioProcessor (BusesProperties()
-                    #if ! JucePlugin_IsMidiEffect
-                     #if ! JucePlugin_IsSynth
-                      .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                     #endif
-                      .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                    #endif
-                     ),
+#if ! JucePlugin_IsMidiEffect
+ #if ! JucePlugin_IsSynth
+      .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+ #endif
+      .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+#endif
+      ),
       parameters(*this, nullptr, juce::Identifier("PARAMETERS"), createParameterLayout())
 {
 }
@@ -19,13 +19,12 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor() {}
 
 //==============================================================================
-// plugin name
+
 const juce::String AudioPluginAudioProcessor::getName() const
 {
     return JucePlugin_Name;
 }
 
-// midi support checks
 bool AudioPluginAudioProcessor::acceptsMidi() const
 {
    #if JucePlugin_WantsMidiInput
@@ -53,13 +52,11 @@ bool AudioPluginAudioProcessor::isMidiEffect() const
    #endif
 }
 
-// tail length of audio
 double AudioPluginAudioProcessor::getTailLengthSeconds() const
 {
     return 0.0;
 }
 
-// program methods not really used for simple plugins
 int AudioPluginAudioProcessor::getNumPrograms()
 {
     return 1;
@@ -87,49 +84,38 @@ void AudioPluginAudioProcessor::changeProgramName (int index, const juce::String
 }
 
 //==============================================================================
-// called when starting playback or changing sample rate
+
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // calculate buffer size for up to 500 ms delay
+    // set up a delay buffer for up to 500ms stereo delay
     int maxDelaySamples = static_cast<int>(0.5 * sampleRate);
-
-    // create a stereo buffer for the delay
     delayBuffer.setSize(2, maxDelaySamples);
     delayBuffer.clear();
-
-    // reset write position to start
     delayWritePosition = 0;
 }
 
-// called when playback stops
 void AudioPluginAudioProcessor::releaseResources()
 {
-    // nothing to do here for this plugin
+    // nothing to release
 }
 
-// bus layout support check for hosts
 bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
   #if JucePlugin_IsMidiEffect
     juce::ignoreUnused (layouts);
     return true;
   #else
-    // only allow mono or stereo
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
      && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
-
    #if ! JucePlugin_IsSynth
-    // input and output must match
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
    #endif
-
     return true;
   #endif
 }
 
-// this is called for every block of audio
 void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -138,19 +124,18 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
     float delayMs = getDelayTimeMs();
     int sampleRate = static_cast<int>(getSampleRate());
-    int maxDelaySamples = static_cast<int>(0.25 * sampleRate);
-    int delaySamples = static_cast<int>(std::abs(delayMs) * sampleRate / 1000.0f);
+    int delaySamples = static_cast<int>(delayMs * sampleRate / 1000.0f);
 
-    // if buffer size or channels change we resize and clear the delay buffer
+    int side = getDelaySide(); // 0 = left, 1 = right
+
+    // setup delay buffer if needed
+    int maxDelaySamples = static_cast<int>(0.5 * sampleRate);
     if (delayBuffer.getNumChannels() != numChannels || delayBuffer.getNumSamples() < maxDelaySamples + numSamples)
     {
         delayBuffer.setSize(numChannels, maxDelaySamples + numSamples, false, true, true);
         delayBuffer.clear();
         delayWritePosition = 0;
     }
-
-    bool delayLeft = (delayMs < 0.0f);
-    bool delayRight = (delayMs > 0.0f);
 
     for (int i = 0; i < numSamples; ++i)
     {
@@ -159,13 +144,11 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             float* channelData = buffer.getWritePointer(channel);
             float* delayData = delayBuffer.getWritePointer(channel);
 
-            // write input sample to the delay buffer
             delayData[delayWritePosition] = channelData[i];
-
             float out = channelData[i];
 
-            // read delayed sample if this channel is delayed
-            if ((channel == 0 && delayLeft) || (channel == 1 && delayRight))
+            // only delay the chosen channel
+            if (channel == side)
             {
                 int delayBufferSize = delayBuffer.getNumSamples();
                 int readPos = (delayWritePosition + delayBufferSize - delaySamples) % delayBufferSize;
@@ -173,7 +156,6 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             }
             channelData[i] = out;
         }
-        // move the write position forward after each sample
         delayWritePosition++;
         if (delayWritePosition >= delayBuffer.getNumSamples())
             delayWritePosition = 0;
@@ -181,20 +163,19 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 }
 
 //==============================================================================
-// this tells the host the plugin has a gui editor
+
 bool AudioPluginAudioProcessor::hasEditor() const
 {
     return true;
 }
 
-// creates the gui editor window
 juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 {
     return new AudioPluginAudioProcessorEditor (*this);
 }
 
 //==============================================================================
-// these are for saving and loading plugin state
+
 void AudioPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     juce::ignoreUnused (destData);
@@ -206,50 +187,38 @@ void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeI
 }
 
 //==============================================================================
-// factory method for making new plugin instances
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new AudioPluginAudioProcessor();
 }
 
-// get the delay parameter value in ms
+// get the delay time parameter value in ms
 float AudioPluginAudioProcessor::getDelayTimeMs() const
 {
     return parameters.getRawParameterValue("delay")->load();
 }
 
+// get the selected side parameter (0 = left, 1 = right)
+int AudioPluginAudioProcessor::getDelaySide() const
+{
+    return (int)parameters.getRawParameterValue("side")->load();
+}
+
+// define the parameter layout for the plugin
 juce::AudioProcessorValueTreeState::ParameterLayout AudioPluginAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    auto delayRange = juce::NormalisableRange<float>(
-        -250.0f, 250.0f,
-        // toValue
-        [](float start, float end, float proportion) {
-            float mid = (end - start) / 2.0f + start;
-            float sign = (proportion < 0.5f) ? -1.0f : 1.0f;
-            float x = (proportion < 0.5f) ? proportion * 2.0f : (proportion - 0.5f) * 2.0f;
-            float curve = 4.0f;
-            float warped = sign * std::pow(x, curve) * (end - mid) + mid;
-            return warped;
-        },
-        // toProportion
-        [](float start, float end, float value) {
-            float mid = (end - start) / 2.0f + start;
-            float sign = (value < mid) ? -1.0f : 1.0f;
-            float x = sign * (value - mid) / (end - mid);
-            float curve = 4.0f;
-            float proportion = std::pow(std::abs(x), 1.0f / curve) / 2.0f;
-            return (sign < 0.0f) ? proportion : (0.5f + proportion);
-        },
-        // step snapper
-        [](float start, float end, float value) {
-            return std::round(value * 100.0f) / 100.0f;
-        }
-    );
+    // create a positive only skewed range for delay in ms
+    auto delayRange = juce::NormalisableRange<float>(0.01f, 250.0f, 0.01f);
+    delayRange.setSkewForCentre(5.0f); // this makes center more sensitive
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "delay", "Delay (ms)", delayRange, 0.0f));
+        "delay", "delay ms", delayRange, 1.0f));
+
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "side", "side", juce::StringArray{ "left", "right" }, 0));
 
     return { params.begin(), params.end() };
 }
