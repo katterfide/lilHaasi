@@ -10,12 +10,12 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     setSize (400, 220);
 
     // set up the delay slider
-    delaySlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag); // use rotary slider for a modern look
-    delaySlider.setRange(-250.0f, 250.0f, 0.1f);
+    delaySlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    delaySlider.setRange(-250.0f, 250.0f, 0.01f); // very fine step size
+    delaySlider.setSkewFactorFromMidPoint(0.0f); // this keeps the zero point central
     delaySlider.setValue(0.0f);
-    delaySlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0); // no textbox for cleaner look
-    delaySlider.setPopupDisplayEnabled(true, false, this); // show value popup on drag
-    delaySlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff1abc9c)); // teal accent
+    delaySlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 16);
+    delaySlider.setNumDecimalPlacesToDisplay(2);
 
     // attach the slider to the parameter in the processor
     delayAttachment.reset(new juce::AudioProcessorValueTreeState::SliderAttachment(
@@ -43,19 +43,29 @@ void AudioPluginAudioProcessorEditor::paint (juce::Graphics& g)
     // set color and draw the plugin name at the top
     g.setColour (juce::Colours::white);
     g.setFont (24.0f);
-    g.drawFittedText ("simple Haas", getLocalBounds().removeFromTop(40), juce::Justification::centred, 1);
+    g.drawFittedText ("lilHaasi", getLocalBounds().removeFromTop(40), juce::Justification::centred, 1);
+
+    // draw small subtitle under plugin name
+    g.setFont (14.0f);
+    g.drawFittedText ("just a simple haas effect", juce::Rectangle<int>(0, 40, getWidth(), 20), juce::Justification::centred, 1);
+
+    // draw company name at bottom right
+    g.setFont (12.0f);
+    g.drawFittedText ("Altschuld", juce::Rectangle<int>(getWidth() - 100, getHeight() - 20, 100, 20), juce::Justification::centredRight, 1);
 }
 
 void AudioPluginAudioProcessorEditor::resized()
 {
-    // layout the controls
+    // define the area for controls, leaving space for the plugin name
     auto area = getLocalBounds().reduced(40);
-    area.removeFromTop(40); // remove space for plugin name
+    area.removeFromTop(40); // space for plugin name
 
-    // place the slider in the center
-    auto sliderArea = area.removeFromTop(120);
-    delaySlider.setBounds(sliderArea.withSizeKeepingCentre(120, 120));
+    int sliderHeight = 30;
+    int labelHeight = 20;
 
-    // place the label just below the slider
-    delayLabel.setBounds(sliderArea.withTrimmedTop(110).withHeight(20));
+    // place slider horizontally
+    delaySlider.setBounds(area.removeFromTop(sliderHeight));
+
+    // place label below the slider
+    delayLabel.setBounds(area.removeFromTop(labelHeight));
 }
