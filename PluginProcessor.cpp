@@ -218,35 +218,36 @@ float AudioPluginAudioProcessor::getDelayTimeMs() const
     return parameters.getRawParameterValue("delay")->load();
 }
 
+// create the parameter layout for the plugin
 juce::AudioProcessorValueTreeState::ParameterLayout AudioPluginAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    // custom range so the slider is sensitive near zero and changes faster near the edges
+    // use a gentle skew so the slider is most sensitive near zero
     juce::NormalisableRange<float> delayRange(
         -250.0f, 250.0f,
-        // map slider position to value
+        // map normalised slider to delay value
         [](float start, float end, float normalised) {
             float mid = (end + start) / 2.0f;
             float half = (end - start) / 2.0f;
-            float skew = 2.5f;
+            float skew = 1.6f;
             float norm = (normalised - 0.5f) * 2.0f;
             return mid + std::copysign(std::pow(std::abs(norm), skew) * half, norm);
         },
-        // map value back to slider position
+        // map delay value back to normalised slider
         [](float start, float end, float value) {
             float mid = (end + start) / 2.0f;
             float half = (end - start) / 2.0f;
-            float skew = 2.5f;
+            float skew = 1.6f;
             float norm = (value - mid) / half;
             return 0.5f + 0.5f * std::copysign(std::pow(std::abs(norm), 1.0f / skew), norm);
         }
     );
 
-    // add the delay parameter with this custom curve
+    // add the delay parameter with custom curve
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "delay", "Delay (ms)", delayRange, 0.0f));
 
-    // return the parameter layout to the processor
+    // return all parameters
     return { params.begin(), params.end() };
 }

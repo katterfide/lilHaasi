@@ -14,8 +14,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     delaySlider.setRange(-250.0f, 250.0f, 0.01f); // very fine step size
     delaySlider.setSkewFactorFromMidPoint(0.0f); // this keeps the zero point central
     delaySlider.setValue(0.0f);
-    delaySlider.setNumDecimalPlacesToDisplay(2);
     delaySlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 16);
+    delaySlider.setNumDecimalPlacesToDisplay(2);
 
     // attach the slider to the parameter in the processor
     delayAttachment.reset(new juce::AudioProcessorValueTreeState::SliderAttachment(
