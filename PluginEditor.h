@@ -1,24 +1,30 @@
+#pragma once
+
 #include <juce_gui_basics/juce_gui_basics.h>
-#include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 
 //==============================================================================
-class AudioPluginAudioProcessorEditor final : public juce::AudioProcessorEditor
+class AudioPluginAudioProcessorEditor  : public juce::AudioProcessorEditor
 {
 public:
-    explicit AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor&);
+    AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor&);
     ~AudioPluginAudioProcessorEditor() override;
 
-    //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
 
-
 private:
-    AudioPluginAudioProcessor& audioProcessor; // <-- gives access to your processor
+    // reference to the processor to access parameters
+    AudioPluginAudioProcessor& audioProcessor;
 
+    // slider for controlling the delay parameter
     juce::Slider delaySlider;
+
+    // label for the delay slider
+    juce::Label delayLabel;
+
+    // attachment for linking the slider to the processor parameter
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> delayAttachment;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudioPluginAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessorEditor)
 };

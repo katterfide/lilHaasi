@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 
 //==============================================================================
+// constructor for setting up the processor and parameters
 AudioPluginAudioProcessor::AudioPluginAudioProcessor()
     : AudioProcessor (BusesProperties()
                     #if ! JucePlugin_IsMidiEffect
@@ -18,11 +19,13 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor() {}
 
 //==============================================================================
+// plugin name
 const juce::String AudioPluginAudioProcessor::getName() const
 {
     return JucePlugin_Name;
 }
 
+// midi support checks
 bool AudioPluginAudioProcessor::acceptsMidi() const
 {
    #if JucePlugin_WantsMidiInput
@@ -50,15 +53,16 @@ bool AudioPluginAudioProcessor::isMidiEffect() const
    #endif
 }
 
+// tail length of audio
 double AudioPluginAudioProcessor::getTailLengthSeconds() const
 {
     return 0.0;
 }
 
+// program methods not really used for simple plugins
 int AudioPluginAudioProcessor::getNumPrograms()
 {
-    return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    return 1;
 }
 
 int AudioPluginAudioProcessor::getCurrentProgram()
@@ -83,43 +87,40 @@ void AudioPluginAudioProcessor::changeProgramName (int index, const juce::String
 }
 
 //==============================================================================
+// called when starting playback or changing sample rate
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-
-
-    // 500ms max delay * sampleRate = max samples needed
+    // calculate buffer size for up to 500 ms delay
     int maxDelaySamples = static_cast<int>(0.5 * sampleRate);
 
-    delayBuffer.setSize(2, maxDelaySamples); // stereo: 2 channels
+    // create a stereo buffer for the delay
+    delayBuffer.setSize(2, maxDelaySamples);
     delayBuffer.clear();
 
+    // reset write position to start
     delayWritePosition = 0;
 }
 
+// called when playback stops
 void AudioPluginAudioProcessor::releaseResources()
 {
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
+    // nothing to do here for this plugin
 }
 
+// bus layout support check for hosts
 bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
   #if JucePlugin_IsMidiEffect
     juce::ignoreUnused (layouts);
     return true;
   #else
-    // This is the place where you check if the layout is supported.
-    // In this template code we only support mono or stereo.
-    // Some plugin hosts, such as certain GarageBand versions, will only
-    // load plugins that support stereo bus layouts.
+    // only allow mono or stereo
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
      && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
-    // This checks if the input layout matches the output layout
    #if ! JucePlugin_IsSynth
+    // input and output must match
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
    #endif
@@ -128,6 +129,7 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
   #endif
 }
 
+// this is called for every block of audio
 void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -136,10 +138,10 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
     float delayMs = getDelayTimeMs();
     int sampleRate = static_cast<int>(getSampleRate());
-    int maxDelaySamples = static_cast<int>(0.25 * sampleRate); // 250ms
+    int maxDelaySamples = static_cast<int>(0.25 * sampleRate);
     int delaySamples = static_cast<int>(std::abs(delayMs) * sampleRate / 1000.0f);
 
-    // Setup delay buffer if necessary
+    // if buffer size or channels change we resize and clear the delay buffer
     if (delayBuffer.getNumChannels() != numChannels || delayBuffer.getNumSamples() < maxDelaySamples + numSamples)
     {
         delayBuffer.setSize(numChannels, maxDelaySamples + numSamples, false, true, true);
@@ -157,13 +159,12 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             float* channelData = buffer.getWritePointer(channel);
             float* delayData = delayBuffer.getWritePointer(channel);
 
-            // Write the input to the delay buffer
+            // write input sample to the delay buffer
             delayData[delayWritePosition] = channelData[i];
 
-            // By default, just copy input to output
             float out = channelData[i];
 
-            // If this is the delayed channel, output the delayed sample
+            // read delayed sample if this channel is delayed
             if ((channel == 0 && delayLeft) || (channel == 1 && delayRight))
             {
                 int delayBufferSize = delayBuffer.getNumSamples();
@@ -172,58 +173,57 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             }
             channelData[i] = out;
         }
-        // Move write head forward ONCE per sample
+        // move the write position forward after each sample
         delayWritePosition++;
         if (delayWritePosition >= delayBuffer.getNumSamples())
             delayWritePosition = 0;
     }
 }
 
-
 //==============================================================================
+// this tells the host the plugin has a gui editor
 bool AudioPluginAudioProcessor::hasEditor() const
 {
-    return true; // (change this to false if you choose to not supply an editor)
+    return true;
 }
 
+// creates the gui editor window
 juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 {
     return new AudioPluginAudioProcessorEditor (*this);
 }
 
 //==============================================================================
+// these are for saving and loading plugin state
 void AudioPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
     juce::ignoreUnused (destData);
 }
 
 void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
     juce::ignoreUnused (data, sizeInBytes);
 }
 
 //==============================================================================
-// This creates new instances of the plugin..
+// factory method for making new plugin instances
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new AudioPluginAudioProcessor();
 }
 
+// get the delay parameter value in ms
 float AudioPluginAudioProcessor::getDelayTimeMs() const
 {
     return parameters.getRawParameterValue("delay")->load();
 }
 
+// define the parameter layout for the plugin
 juce::AudioProcessorValueTreeState::ParameterLayout AudioPluginAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    // Range: -250 ms to +250 ms, centered at 0
+    // one parameter delay in ms from -250 to 250
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "delay", "Delay (ms)", juce::NormalisableRange<float>(-250.0f, 250.0f), 0.0f));
 
