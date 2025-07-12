@@ -218,14 +218,38 @@ float AudioPluginAudioProcessor::getDelayTimeMs() const
     return parameters.getRawParameterValue("delay")->load();
 }
 
-// define the parameter layout for the plugin
 juce::AudioProcessorValueTreeState::ParameterLayout AudioPluginAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    // one parameter delay in ms from -250 to 250
+    auto delayRange = juce::NormalisableRange<float>(
+        -250.0f, 250.0f,
+        // toValue
+        [](float start, float end, float proportion) {
+            float mid = (end - start) / 2.0f + start;
+            float sign = (proportion < 0.5f) ? -1.0f : 1.0f;
+            float x = (proportion < 0.5f) ? proportion * 2.0f : (proportion - 0.5f) * 2.0f;
+            float curve = 4.0f;
+            float warped = sign * std::pow(x, curve) * (end - mid) + mid;
+            return warped;
+        },
+        // toProportion
+        [](float start, float end, float value) {
+            float mid = (end - start) / 2.0f + start;
+            float sign = (value < mid) ? -1.0f : 1.0f;
+            float x = sign * (value - mid) / (end - mid);
+            float curve = 4.0f;
+            float proportion = std::pow(std::abs(x), 1.0f / curve) / 2.0f;
+            return (sign < 0.0f) ? proportion : (0.5f + proportion);
+        },
+        // step snapper
+        [](float start, float end, float value) {
+            return std::round(value * 100.0f) / 100.0f;
+        }
+    );
+
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "delay", "Delay (ms)", juce::NormalisableRange<float>(-250.0f, 250.0f), 0.0f));
+        "delay", "Delay (ms)", delayRange, 0.0f));
 
     return { params.begin(), params.end() };
 }
